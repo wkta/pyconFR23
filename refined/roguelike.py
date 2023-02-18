@@ -1,12 +1,15 @@
-import katagames_engine as kengi
-kengi.bootstrap_e()
+"""
+Program:
+ roguelike mockup
 
+Author:
+ Thomas I.
+ twitter.com/moonb3ndr
+ License MIT
 """
-this file contains 3 basic mvc COMPOnents
-that can implement a rogue-like
-"""
-import os  # for loading assets
 import katagames_engine as kengi
+
+kengi.bootstrap_e()
 
 
 pygame = kengi.pygame
@@ -18,15 +21,12 @@ BoolMatrx = kengi.struct.BoolMatrix
 
 
 # game-specific declarations
-MyEvTypes = kengi.struct.enum(
+MyEvTypes = kengi.game_events_enum((
     'PlayerMoves',  # contains: new_pos
     'NewLevel'
-)
+))
 
 
-# ------------------------------------
-#  THE MODEL
-# ------------------------------------
 class NinjamazeMod(CogObject):
     VISION_RANGE = 4  # cells
     fov_computer = None
@@ -120,42 +120,36 @@ class NinjamazeMod(CogObject):
 class NinjamazeView(ReceiverObj):
     CELL_SIDE = 32  # px
     WALL_COLOR = (8, 8, 24)
-    HIDDEN_CELL_COLOR = (24, 24, 24)
+    HIDDEN_CELL_COLOR = (55, 55, 70)
 
     def __init__(self, ref_mod):
         super().__init__()
         self.assoc_r_col = dict()
         grid_rez = (32, 32)
 
-        img = pygame.image.load(os.path.join('../img', 'tileset.png')).convert()
+        img = pygame.image.load('../img/tileset.png').convert()
         self.tileset = Sprsheet(img, 2)  # use upscaling x2
         self.tileset.set_infos(grid_rez)
 
-        img = pygame.image.load(os.path.join('../img', '1.png')).convert()
+        img = pygame.image.load('../img/1.png')
         self.planche_avatar = Sprsheet(img, 2)  # upscaling x2
-        self.planche_avatar.set_infos(grid_rez)
         self.planche_avatar.colorkey = (255, 0, 255)
+        self.planche_avatar.set_infos(grid_rez)
 
-        self.monster_img = pygame.image.load(os.path.join('../img', 'monster.png')).convert()
+        self.monster_img = pygame.image.load('../img/monster.png').convert()
         self.monster_img = pygame.transform.scale(self.monster_img, (32, 32))
         self.monster_img.set_colorkey((255, 0, 255))
 
         self.mod = ref_mod
         self.avatar_apparence = self.planche_avatar.image_by_rank(0)
+        print(self.avatar_apparence.get_colorkey())
         self.pos_avatar = ref_mod.get_av_pos()
 
-    def proc_event(self, ev, source):
-        if ev.type == EngineEvTypes.PAINT:
-            self._draw_content(ev.screen)
-        elif ev.type == MyEvTypes.PlayerMoves:
-            self.pos_avatar = ev.new_pos
-
-    def _draw_content(self, scr):
+    def on_paint(self, ev):
+        scr = ev.screen
         scr.fill(self.WALL_COLOR)
-
         nw_corner = (0, 0)
         tmp_r4 = [None, None, None, None]
-
         tuile = self.tileset.image_by_rank(912)
 
         dim = self.mod.get_terrain().get_size()
@@ -182,8 +176,13 @@ class NinjamazeView(ReceiverObj):
         # draw enemies
         for enemy_info in self.mod.enemies_pos2type.items():
             pos, t = enemy_info
+            if not self.mod.visibility_m.get_val(*pos):
+                continue
             en_i, en_j = pos[0] * self.CELL_SIDE, pos[1] * self.CELL_SIDE
             scr.blit(self.monster_img, (en_i, en_j, 32, 32))
+
+    def on_player_moves(self, ev):
+        self.pos_avatar = ev.new_pos
 
 
 # ------------------------------------
@@ -195,8 +194,8 @@ class NinjamazeCtrl(ReceiverObj):
         super().__init__()
         self.mod = ref_mod
 
-    def proc_event(self, ev, source):
-        if ev.type == pygame.KEYDOWN:
+    def on_event(self, ev):
+        if ev.type == kengi.EngineEvTypes.Keydown:
             if ev.key == pygame.K_RIGHT:
                 self.mod.push_player(0)
             elif ev.key == pygame.K_UP:
@@ -211,21 +210,29 @@ class NinjamazeCtrl(ReceiverObj):
                 self.pev(EngineEvTypes.GAMEENDS)
 
 
-def print_tuto():
-    print('\n' + '*'*32)
-    print('This example showcases capabilities of the kengi.rogue')
-    print('submodule... You can easily generate a RANDOM MAZE')
-    print('you can also use a field-of-view generic algorithm')
-    print('to simulate the "fog of war"/unknown parts of the map.')
-    print('>>CONTROLS<< SPACE to regen maze | ESCAPE to quit\n' + '*'*32)
+class RogueLikeDemo(kengi.GameTpl):
+    def init_video(self):
+        kengi.init()
+
+    def setup_ev_manager(self):
+        self._manager.setup(MyEvTypes)
+
+    def enter(self, vms=None):
+        super().enter(vms)
+        m = NinjamazeMod()
+        NinjamazeView(m).turn_on()
+        NinjamazeCtrl(m).turn_on()
+        RogueLikeDemo.print_tuto()
+
+    @staticmethod
+    def print_tuto():
+        print('\n' + '*'*32)
+        print('This example showcases capabilities of the kengi.rogue')
+        print('submodule... You can easily generate a RANDOM MAZE')
+        print('you can also use a field-of-view generic algorithm')
+        print('to simulate the "fog of war"/unknown parts of the map.')
+        print('>>CONTROLS<< SPACE to regen maze | ESCAPE to quit\n' + '*'*32)
 
 
-if __name__ == '__main__':
-    kengi.init()
-    m = NinjamazeMod()
-    NinjamazeView(m).turn_on()
-    NinjamazeCtrl(m).turn_on()
-    print_tuto()
-    kengi.get_game_ctrl().turn_on().loop()
-    kengi.quit()
-    print('bye!')
+g = RogueLikeDemo()
+g.loop()
